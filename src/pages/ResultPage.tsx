@@ -1,18 +1,20 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useSocket } from '@/hooks/useSocket'
+import ReplayCanvas from '@/components/ReplayCanvas'
 import {
-  Trophy, Crown, Medal, Home, RotateCcw, Gamepad2, Star, Sparkles
+  Trophy, Crown, Medal, Home, RotateCcw, Gamepad2, Star, Sparkles, Play
 } from 'lucide-react'
 
 export default function ResultPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { room, voteResults, voteCandidates, resetGame, clearChat, setRoom } = useGameStore()
+  const { room, voteResults, voteCandidates, replayRounds, resetGame, clearChat, setRoom } = useGameStore()
   const { connect, leaveRoom } = useSocket()
+  const [selectedRound, setSelectedRound] = useState<number | null>(null)
 
   useEffect(() => {
     if (!user) {
@@ -157,6 +159,67 @@ export default function ResultPage() {
             <span className="text-4xl block mb-1">{voteWinnerCandidate.avatar}</span>
             <p className="text-white font-bold">{voteWinnerCandidate.username}</p>
             <p className="text-yellow-400/60 text-sm">{voteWinner?.votes ?? 0} 票</p>
+          </div>
+        )}
+
+        {replayRounds.length > 0 && (
+          <div className="glass-card-solid p-5 mb-6">
+            <h3 className="text-lg font-bold text-white mb-4 font-display flex items-center gap-2">
+              <Play className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+              创作回放
+            </h3>
+
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {replayRounds.map((round) => {
+                const isOwn = round.drawerId === user?.id
+                return (
+                  <button
+                    key={round.roundNumber}
+                    onClick={() => setSelectedRound(selectedRound === round.roundNumber ? null : round.roundNumber)}
+                    className={`shrink-0 px-3 py-2 rounded-xl text-sm transition-all flex items-center gap-2 ${
+                      selectedRound === round.roundNumber
+                        ? 'bg-white/15 border border-white/20'
+                        : 'bg-white/[0.03] border border-transparent hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className="text-base">{round.drawerAvatar}</span>
+                    <div className="text-left">
+                      <p className="text-white/80 font-medium">第 {round.roundNumber} 轮</p>
+                      <p className="text-white/40 text-xs">{round.drawerName}</p>
+                    </div>
+                    {isOwn && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,107,53,0.15)', color: 'var(--color-primary)' }}>
+                        你画的
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {selectedRound !== null && (() => {
+              const round = replayRounds.find(r => r.roundNumber === selectedRound)
+              if (!round) return null
+              return (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">{round.drawerAvatar}</span>
+                    <div>
+                      <p className="text-white font-bold text-sm">{round.drawerName} 的创作</p>
+                      <p className="text-white/40 text-xs">
+                        第 {round.roundNumber} 轮 · {round.strokes.length} 笔画 · 答案：
+                        <span className="font-bold" style={{ color: 'var(--color-accent-yellow)' }}>{round.word}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <ReplayCanvas strokes={round.strokes} />
+                </div>
+              )
+            })()}
+
+            {selectedRound === null && (
+              <p className="text-white/30 text-sm text-center py-4">点击上方回合查看回放</p>
+            )}
           </div>
         )}
 

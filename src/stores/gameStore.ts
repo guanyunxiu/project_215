@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Room, ChatMessage, StrokeData, ScoreUpdate, VoteCandidate, VoteResult, GuessRecord } from '../../shared/types'
+import type { Room, ChatMessage, StrokeData, ScoreUpdate, VoteCandidate, VoteResult, GuessRecord, ReplayRound } from '../../shared/types'
 
 interface GameState {
   room: Room | null
@@ -16,6 +16,7 @@ interface GameState {
   hasVoted: boolean
   roundEndWord: string | null
   isGameStarted: boolean
+  replayRounds: ReplayRound[]
 
   setRoom: (room: Room | null) => void
   setCurrentWord: (word: string | null) => void
@@ -36,6 +37,7 @@ interface GameState {
   setHasVoted: (voted: boolean) => void
   setRoundEndWord: (word: string | null) => void
   setIsGameStarted: (started: boolean) => void
+  saveRoundReplay: (round: ReplayRound) => void
   resetGame: () => void
 }
 
@@ -54,6 +56,7 @@ export const useGameStore = create<GameState>((set) => ({
   hasVoted: false,
   roundEndWord: null,
   isGameStarted: false,
+  replayRounds: [],
 
   setRoom: (room) => set({ room }),
   setCurrentWord: (word) => set({ currentWord: word }),
@@ -80,6 +83,8 @@ export const useGameStore = create<GameState>((set) => ({
   setHasVoted: (voted) => set({ hasVoted: voted }),
   setRoundEndWord: (word) => set({ roundEndWord: word }),
   setIsGameStarted: (started) => set({ isGameStarted: started }),
+  saveRoundReplay: (round) =>
+    set((state) => ({ replayRounds: [...state.replayRounds, round] })),
   resetGame: () =>
     set({
       currentWord: null,
@@ -95,5 +100,6 @@ export const useGameStore = create<GameState>((set) => ({
       hasVoted: false,
       roundEndWord: null,
       isGameStarted: false,
+      replayRounds: [],
     }),
 }))

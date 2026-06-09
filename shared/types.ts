@@ -90,3 +90,12 @@ export interface GuessRecord {
   isCorrect: boolean
   timestamp: number
 }
+
+export interface ReplayRound {
+  roundNumber: number
+  drawerId: string
+  drawerName: string
+  drawerAvatar: string
+  word: string
+  strokes: StrokeData[]
+}
