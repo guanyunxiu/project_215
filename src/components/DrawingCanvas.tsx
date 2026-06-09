@@ -51,8 +51,9 @@ export default function DrawingCanvas({
   const colorRef = useRef(color)
   const widthRef = useRef(width)
   const toolRef = useRef(tool)
-  const strokesRef = useRef<StrokeData[]>(strokes)
   const isRedrawingRef = useRef(false)
+  const initAttemptRef = useRef(0)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
   useEffect(() => {
     isDrawingRef.current = isDrawing
@@ -74,10 +75,6 @@ export default function DrawingCanvas({
     toolRef.current = tool
   }, [tool])
 
-  useEffect(() => {
-    strokesRef.current = strokes
-  }, [strokes])
-
   const updateBrush = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -96,24 +93,40 @@ export default function DrawingCanvas({
     updateBrush()
   }, [color, width, tool, updateBrush])
 
-  useEffect(() => {
+  const initCanvas = useCallback(() => {
     if (!containerRef.current) return
+    if (canvasRef.current) return
 
     const el = containerRef.current
+    const w = el.clientWidth
+    const h = el.clientHeight
+
+    if (w < 10 || h < 10) {
+      initAttemptRef.current++
+      if (initAttemptRef.current < 50) {
+        requestAnimationFrame(initCanvas)
+      }
+      return
+    }
+
     const canvasEl = document.createElement('canvas')
+    canvasEl.id = 'drawing-canvas'
     el.appendChild(canvasEl)
 
-    const canvas = new Canvas(canvasEl, {
-      width: el.clientWidth,
-      height: el.clientHeight,
+    const canvas = new Canvas('drawing-canvas', {
+      width: w,
+      height: h,
       backgroundColor: '#ffffff',
       selection: false,
-      isDrawingMode: isDrawing,
+      isDrawingMode: isDrawingRef.current,
     })
 
+    const leftover = el.querySelector('canvas:not(.lower-canvas):not(.upper-canvas)')
+    if (leftover) leftover.remove()
+
     const brush = new PencilBrush(canvas)
-    brush.color = tool === 'eraser' ? '#ffffff' : color
-    brush.width = tool === 'eraser' ? width * 3 : width
+    brush.color = toolRef.current === 'eraser' ? '#ffffff' : colorRef.current
+    brush.width = toolRef.current === 'eraser' ? widthRef.current * 3 : widthRef.current
     canvas.freeDrawingBrush = brush
 
     canvasRef.current = canvas
@@ -146,21 +159,40 @@ export default function DrawingCanvas({
         timestamp: Date.now(),
       })
     })
+  }, [])
 
-    const handleResize = () => {
-      if (!containerRef.current || !canvasRef.current) return
-      const w = containerRef.current.clientWidth
-      const h = containerRef.current.clientHeight
-      canvasRef.current.setDimensions({ width: w, height: h })
-    }
-    window.addEventListener('resize', handleResize)
+  useEffect(() => {
+    initCanvas()
+
+    const el = containerRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: newW, height: newH } = entry.contentRect
+        const canvas = canvasRef.current
+        if (!canvas) {
+          initCanvas()
+          return
+        }
+        if (newW > 10 && newH > 10) {
+          canvas.setDimensions({ width: newW, height: newH })
+          canvas.renderAll()
+        }
+      }
+    })
+    observer.observe(el)
+    resizeObserverRef.current = observer
 
     return () => {
-      window.removeEventListener('resize', handleResize)
-      canvas.dispose()
-      canvasRef.current = null
+      observer.disconnect()
+      resizeObserverRef.current = null
+      if (canvasRef.current) {
+        canvasRef.current.dispose()
+        canvasRef.current = null
+      }
     }
-  }, [])
+  }, [initCanvas])
 
   useEffect(() => {
     const canvas = canvasRef.current

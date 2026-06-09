@@ -139,3 +139,15 @@ body {
 .glass-card-solid {
   @apply bg-[var(--color-bg-card)] rounded-2xl border border-white/10 shadow-lg;
 }
+
+.canvas-container {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.canvas-container canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}
