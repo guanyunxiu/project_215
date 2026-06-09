@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+:root {
+  --color-primary: #FF6B35;
+  --color-primary-light: #FF8C5A;
+  --color-primary-dark: #E55A25;
+  --color-secondary: #1A1A2E;
+  --color-accent-yellow: #FFD93D;
+  --color-accent-green: #6BCB77;
+  --color-accent-pink: #FF6B8A;
+  --color-bg-dark: #0F0F1A;
+  --color-bg-card: #1A1A2E;
+  --color-bg-card-light: #252540;
+  --font-display: 'Fredoka', 'Noto Sans SC', sans-serif;
+  --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+
+body {
+  background: var(--color-bg-dark);
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 107, 53, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(255, 107, 53, 0.6); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+@keyframes score-fly-in {
+  0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+  60% { opacity: 1; transform: translateY(-10px) scale(1.1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes countdown-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bar-grow {
+  from { width: 0%; }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-score-fly {
+  animation: score-fly-in 0.6s ease-out;
+}
+
+.animate-countdown-pulse {
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out;
+}
+
+.animate-bar-grow {
+  animation: bar-grow 1s ease-out;
+}
+
+.btn-primary {
+  @apply px-4 py-2.5 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 active:scale-95;
+}
+
+.glass-card {
+  @apply bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-lg;
+}
+
+.glass-card-solid {
+  @apply bg-[var(--color-bg-card)] rounded-2xl border border-white/10 shadow-lg;
+}
