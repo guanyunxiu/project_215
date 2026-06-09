@@ -80,7 +80,8 @@ export default function RoomPage() {
   }
 
   const isHost = user?.id === room.hostId
-  const canStart = isHost && room.players.filter(p => p.isConnected).length >= 2
+  const connectedPlayers = room.players.filter(p => p.isConnected)
+  const canStart = isHost && connectedPlayers.length >= 1
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-bg-dark)' }}>
@@ -158,19 +159,30 @@ export default function RoomPage() {
                     <p className="text-2xl font-bold text-white font-display">{room.totalRounds}</p>
                   </div>
                 </div>
+                {connectedPlayers.length < 2 && (
+                  <p className="text-yellow-400/80 text-sm mt-3 flex items-center gap-1.5">
+                    <Users className="w-4 h-4" />
+                    当前仅 {connectedPlayers.length} 人，可以开始练习模式（其他人加入后会自动参与）
+                  </p>
+                )}
                 <button
                   onClick={handleStart}
-                  disabled={!canStart}
-                  className={`w-full mt-4 py-3.5 rounded-xl font-bold text-lg font-display transition-all flex items-center justify-center gap-2 ${
-                    canStart
-                      ? 'text-white hover:brightness-110 active:scale-[0.98]'
-                      : 'bg-white/5 text-white/30 cursor-not-allowed'
-                  }`}
-                  style={canStart ? { background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))' } : {}}
+                  className="w-full mt-4 py-3.5 rounded-xl font-bold text-lg font-display transition-all flex items-center justify-center gap-2 text-white hover:brightness-110 active:scale-[0.98]"
+                  style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))' }}
                 >
                   <Play className="w-5 h-5" />
-                  {canStart ? '开始游戏' : '等待更多玩家...'}
+                  {connectedPlayers.length >= 2 ? '开始游戏' : '开始练习'}
                 </button>
+              </section>
+            )}
+            {!isHost && (
+              <section className="glass-card-solid p-6 text-center">
+                <div className="animate-pulse flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,107,53,0.15)' }}>
+                    <Play className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                  <p className="text-white/60">等待房主开始游戏...</p>
+                </div>
               </section>
             )}
           </div>

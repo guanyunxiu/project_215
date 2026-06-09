@@ -45,8 +45,13 @@ export function joinRoom(
 ): Room | null {
   const room = rooms.get(roomId)
   if (!room) return null
-  if (room.players.length >= room.maxPlayers) return null
-  if (room.players.some(p => p.userId === userId)) return room
+  if (room.players.length >= room.maxPlayers && !room.players.some(p => p.userId === userId)) return null
+
+  const existingPlayer = room.players.find(p => p.userId === userId)
+  if (existingPlayer) {
+    existingPlayer.isConnected = true
+    return room
+  }
 
   const player: Player = {
     userId,

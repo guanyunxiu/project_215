@@ -8,6 +8,8 @@ import { users } from '../middleware/auth.js'
 
 const socketRoomMap = new Map<string, string>()
 const socketUserMap = new Map<string, { userId: string; username: string; avatar: string }>()
+const userSocketsMap = new Map<string, Set<string>>()
+const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export function registerSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
@@ -23,6 +25,22 @@ export function registerSocketHandlers(io: Server): void {
     }
 
     socketUserMap.set(socket.id, { userId, username: username ?? '', avatar: avatar ?? '' })
+
+    if (!userSocketsMap.has(userId)) {
+      userSocketsMap.set(userId, new Set())
+    }
+    userSocketsMap.get(userId)!.add(socket.id)
+
+    const pendingTimer = disconnectTimers.get(userId)
+    if (pendingTimer) {
+      clearTimeout(pendingTimer)
+      disconnectTimers.delete(userId)
+      const roomId = socketRoomMap.get(socket.id)
+      if (roomId) {
+        roomService.setPlayerConnected(roomId, userId, true)
+        io.to(roomId).emit('room:updated', { room: roomService.getRoom(roomId) })
+      }
+    }
 
     socket.on('room:join', (data: { roomId: string }) => {
       const { roomId } = data
@@ -106,8 +124,8 @@ export function registerSocketHandlers(io: Server): void {
         return
       }
 
-      if (room.players.length < 2) {
-        socket.emit('error', { message: 'Need at least 2 players' })
+      if (room.players.filter(p => p.isConnected).length < 1) {
+        socket.emit('error', { message: 'Need at least 1 player' })
         return
       }
 
@@ -307,19 +325,42 @@ export function registerSocketHandlers(io: Server): void {
       const user = socketUserMap.get(socket.id)
       const roomId = socketRoomMap.get(socket.id)
 
-      if (user && roomId) {
-        roomService.setPlayerConnected(roomId, user.userId, false)
-        io.to(roomId).emit('room:updated', { room: roomService.getRoom(roomId) })
-
-        const msg: ChatMessage = {
-          id: uuidv4(),
-          userId: 'system',
-          username: '系统',
-          content: `${user.username} 离开了房间`,
-          timestamp: Date.now(),
-          isSystem: true,
+      if (user) {
+        const userSockets = userSocketsMap.get(user.userId)
+        if (userSockets) {
+          userSockets.delete(socket.id)
+          if (userSockets.size > 0) {
+            socketRoomMap.delete(socket.id)
+            socketUserMap.delete(socket.id)
+            return
+          }
         }
-        io.to(roomId).emit('room:chat', { message: msg })
+
+        if (roomId) {
+          const timer = setTimeout(() => {
+            const currentSockets = userSocketsMap.get(user.userId)
+            if (currentSockets && currentSockets.size > 0) {
+              disconnectTimers.delete(user.userId)
+              return
+            }
+
+            roomService.setPlayerConnected(roomId, user.userId, false)
+            io.to(roomId).emit('room:updated', { room: roomService.getRoom(roomId) })
+
+            const msg: ChatMessage = {
+              id: uuidv4(),
+              userId: 'system',
+              username: '系统',
+              content: `${user.username} 离开了房间`,
+              timestamp: Date.now(),
+              isSystem: true,
+            }
+            io.to(roomId).emit('room:chat', { message: msg })
+            disconnectTimers.delete(user.userId)
+          }, 5000)
+
+          disconnectTimers.set(user.userId, timer)
+        }
       }
 
       socketRoomMap.delete(socket.id)
@@ -364,6 +405,20 @@ function findSocketByUserId(io: Server, userId: string): Socket | null {
   return null
 }
 
+function broadcastHintToNonDrawers(io: Server, roomId: string, room: any, hint: string): void {
+  const drawer = room.players.find((p: any) => p.isDrawing)
+  const drawerSockets = drawer ? findSocketsByUserId(io, drawer.userId) : []
+  const drawerSocketIds = new Set(drawerSockets.map(s => s.id))
+  const sockets = io.sockets.adapter.rooms.get(roomId)
+  if (!sockets) return
+  for (const socketId of sockets) {
+    if (!drawerSocketIds.has(socketId)) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s) s.emit('game:hintReveal', { hint })
+    }
+  }
+}
+
 function findSocketsByUserId(io: Server, userId: string): Socket[] {
   const result: Socket[] = []
   for (const [socketId, user] of socketUserMap) {
@@ -401,24 +456,21 @@ function startRoundTimer(io: Server, roomId: string): void {
         hintRevealedAt15 = true
         const hint = gameService.generateHint(word, 0.2)
         gameService.updateHint(roomId, hint)
-        const drawer = currentRoom.players.find(p => p.isDrawing)
-        io.to(roomId).except(drawer?.userId ?? '').emit('game:hintReveal', { hint })
+        broadcastHintToNonDrawers(io, roomId, currentRoom, hint)
       }
 
       if (elapsed >= 30 && !hintRevealedAt30) {
         hintRevealedAt30 = true
         const hint = gameService.generateHint(word, 0.4)
         gameService.updateHint(roomId, hint)
-        const drawer = currentRoom.players.find(p => p.isDrawing)
-        io.to(roomId).except(drawer?.userId ?? '').emit('game:hintReveal', { hint })
+        broadcastHintToNonDrawers(io, roomId, currentRoom, hint)
       }
 
       if (elapsed >= 45 && !hintRevealedAt45) {
         hintRevealedAt45 = true
         const hint = gameService.generateHint(word, 0.6)
         gameService.updateHint(roomId, hint)
-        const drawer = currentRoom.players.find(p => p.isDrawing)
-        io.to(roomId).except(drawer?.userId ?? '').emit('game:hintReveal', { hint })
+        broadcastHintToNonDrawers(io, roomId, currentRoom, hint)
       }
     },
     () => {
@@ -451,6 +503,16 @@ function endRound(io: Server, roomId: string): void {
           avatar: p.avatar,
           thumbnailDataUrl: '',
         }))
+
+      if (candidates.length <= 1) {
+        roomService.updateRoomStatus(roomId, 'finished')
+        io.to(roomId).emit('room:updated', { room: roomService.getRoom(roomId)! })
+        io.to(roomId).emit('game:gameEnd', { room: roomService.getRoom(roomId)! })
+        io.to(roomId).emit('vote:result', {
+          results: candidates.map(c => ({ userId: c.userId, votes: 0, isWinner: true })),
+        })
+        return
+      }
 
       voteService.startVote(roomId, candidates)
       roomService.updateRoomStatus(roomId, 'voting')

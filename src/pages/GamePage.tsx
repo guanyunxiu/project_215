@@ -24,7 +24,7 @@ export default function GamePage() {
   const { user } = useAuthStore()
   const {
     room, currentWord, currentHint, timeLeft, strokes, chatMessages,
-    scores, guessRecords, roundEndWord, setRoom, resetGame, addChatMessage, clearChat,
+    scores, guessRecords, roundEndWord, voteResults, setRoom, resetGame, addChatMessage, clearChat,
   } = useGameStore()
   const { sendDraw, sendGuess, clearCanvas, undoStroke, leaveRoom, connect, joinRoom } = useSocket()
 
@@ -61,6 +61,14 @@ export default function GamePage() {
       navigate(`/vote/${roomId}`)
     }
   }, [room?.status, roomId])
+
+  useEffect(() => {
+    if (room?.status === 'finished' && roomId && voteResults && voteResults.length > 0) {
+      setTimeout(() => {
+        navigate(`/result/${roomId}`)
+      }, 3000)
+    }
+  }, [room?.status, voteResults, roomId])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })

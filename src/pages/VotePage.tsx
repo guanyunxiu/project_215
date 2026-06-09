@@ -31,12 +31,12 @@ export default function VotePage() {
   }, [user, roomId])
 
   useEffect(() => {
-    if (room?.status === 'finished' && voteResults) {
+    if (voteResults && voteResults.length > 0) {
       setTimeout(() => {
         navigate(`/result/${roomId}`)
       }, 3000)
     }
-  }, [room?.status, voteResults, roomId])
+  }, [voteResults, roomId])
 
   const handleVote = useCallback(() => {
     if (!selectedId || voted) return

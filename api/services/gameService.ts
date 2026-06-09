@@ -52,7 +52,7 @@ export function startGame(roomId: string): {
   hint: string
 } | null {
   const room = roomService.getRoom(roomId)
-  if (!room || room.players.length < 2) return null
+  if (!room || room.players.filter(p => p.isConnected).length < 1) return null
 
   const state = initGameState(roomId, room.totalRounds)
   room.currentRound = 1
