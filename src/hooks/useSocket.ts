@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import type { ChatMessage, StrokeData, ReplayRound } from '../../shared/types'
+import type { ChatMessage, StrokeData } from '../../shared/types'
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null)
@@ -53,6 +53,14 @@ export function useSocket() {
       gameStore.getState().setCurrentHint('')
       gameStore.getState().setTimeLeft(60)
       gameStore.getState().setRoundEndWord(null)
+      const drawer = data.room?.players?.find((p: any) => p.isDrawing)
+      if (drawer) {
+        gameStore.getState().setCurrentDrawer({
+          userId: drawer.userId,
+          username: drawer.username,
+          avatar: drawer.avatar,
+        })
+      }
     })
 
     socket.on('game:wordAssigned', (data: { word: string; drawerId: string }) => {
@@ -70,25 +78,6 @@ export function useSocket() {
     })
 
     socket.on('game:roundStart', (data: { roundNumber: number; drawerId: string; room: any }) => {
-      const state = gameStore.getState()
-      const prevRoom = state.room
-      const prevStrokes = state.strokes
-      if (prevRoom && prevStrokes.length > 0) {
-        const prevRound = prevRoom.currentRound
-        const prevDrawer = prevRoom.players.find(p => p.isDrawing)
-        const prevWord = state.currentWord || state.roundEndWord || ''
-        if (prevDrawer) {
-          const replay: ReplayRound = {
-            roundNumber: prevRound,
-            drawerId: prevDrawer.userId,
-            drawerName: prevDrawer.username,
-            drawerAvatar: prevDrawer.avatar,
-            word: prevWord,
-            strokes: [...prevStrokes],
-          }
-          gameStore.getState().saveRoundReplay(replay)
-        }
-      }
       gameStore.getState().setRoom(data.room)
       gameStore.getState().clearStrokes()
       gameStore.getState().clearGuessRecords()
@@ -96,9 +85,32 @@ export function useSocket() {
       gameStore.getState().setCurrentHint('')
       gameStore.getState().setTimeLeft(60)
       gameStore.getState().setRoundEndWord(null)
+      const drawer = data.room?.players?.find((p: any) => p.isDrawing)
+      if (drawer) {
+        gameStore.getState().setCurrentDrawer({
+          userId: drawer.userId,
+          username: drawer.username,
+          avatar: drawer.avatar,
+        })
+      }
     })
 
     socket.on('game:roundEnd', (data: { word: string; room: any }) => {
+      const state = gameStore.getState()
+      const drawer = state.currentDrawer
+      if (drawer && state.strokes.length > 0 && state.room) {
+        const already = state.replayRounds.some(r => r.roundNumber === state.room!.currentRound)
+        if (!already) {
+          gameStore.getState().saveRoundReplay({
+            roundNumber: state.room.currentRound,
+            drawerId: drawer.userId,
+            drawerName: drawer.username,
+            drawerAvatar: drawer.avatar,
+            word: data.word,
+            strokes: [...state.strokes],
+          })
+        }
+      }
       gameStore.getState().setRoundEndWord(data.word)
       gameStore.getState().setRoom(data.room)
       gameStore.getState().setCurrentWord(null)
@@ -107,21 +119,18 @@ export function useSocket() {
 
     socket.on('game:gameEnd', (data: { room: any }) => {
       const state = gameStore.getState()
-      const room = state.room
-      const lastStrokes = state.strokes
-      if (room && lastStrokes.length > 0) {
-        const drawer = room.players.find(p => p.isDrawing)
-        const word = state.roundEndWord || state.currentWord || ''
-        if (drawer) {
-          const replay: ReplayRound = {
-            roundNumber: room.currentRound,
+      const drawer = state.currentDrawer
+      if (drawer && state.strokes.length > 0 && state.room) {
+        const already = state.replayRounds.some(r => r.roundNumber === state.room!.currentRound)
+        if (!already) {
+          gameStore.getState().saveRoundReplay({
+            roundNumber: state.room.currentRound,
             drawerId: drawer.userId,
             drawerName: drawer.username,
             drawerAvatar: drawer.avatar,
-            word,
-            strokes: [...lastStrokes],
-          }
-          gameStore.getState().saveRoundReplay(replay)
+            word: state.roundEndWord || state.currentWord || '',
+            strokes: [...state.strokes],
+          })
         }
       }
       gameStore.getState().setRoom(data.room)

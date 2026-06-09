@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { Room, ChatMessage, StrokeData, ScoreUpdate, VoteCandidate, VoteResult, GuessRecord, ReplayRound } from '../../shared/types'
 
+interface DrawerInfo {
+  userId: string
+  username: string
+  avatar: string
+}
+
 interface GameState {
   room: Room | null
   currentWord: string | null
@@ -17,6 +23,7 @@ interface GameState {
   roundEndWord: string | null
   isGameStarted: boolean
   replayRounds: ReplayRound[]
+  currentDrawer: DrawerInfo | null
 
   setRoom: (room: Room | null) => void
   setCurrentWord: (word: string | null) => void
@@ -38,6 +45,7 @@ interface GameState {
   setRoundEndWord: (word: string | null) => void
   setIsGameStarted: (started: boolean) => void
   saveRoundReplay: (round: ReplayRound) => void
+  setCurrentDrawer: (drawer: DrawerInfo | null) => void
   resetGame: () => void
 }
 
@@ -57,6 +65,7 @@ export const useGameStore = create<GameState>((set) => ({
   roundEndWord: null,
   isGameStarted: false,
   replayRounds: [],
+  currentDrawer: null,
 
   setRoom: (room) => set({ room }),
   setCurrentWord: (word) => set({ currentWord: word }),
@@ -85,6 +94,7 @@ export const useGameStore = create<GameState>((set) => ({
   setIsGameStarted: (started) => set({ isGameStarted: started }),
   saveRoundReplay: (round) =>
     set((state) => ({ replayRounds: [...state.replayRounds, round] })),
+  setCurrentDrawer: (drawer) => set({ currentDrawer: drawer }),
   resetGame: () =>
     set({
       currentWord: null,
@@ -101,5 +111,6 @@ export const useGameStore = create<GameState>((set) => ({
       roundEndWord: null,
       isGameStarted: false,
       replayRounds: [],
+      currentDrawer: null,
     }),
 }))
