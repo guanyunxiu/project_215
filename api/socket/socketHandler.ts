@@ -4,12 +4,24 @@ import type { ChatMessage, StrokeData, VoteCandidate } from '../../shared/types.
 import * as roomService from '../services/roomService.js'
 import * as gameService from '../services/gameService.js'
 import * as voteService from '../services/voteService.js'
+import * as replayService from '../services/replayService.js'
 import { users } from '../middleware/auth.js'
 
 const socketRoomMap = new Map<string, string>()
 const socketUserMap = new Map<string, { userId: string; username: string; avatar: string }>()
 const userSocketsMap = new Map<string, Set<string>>()
 const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+interface RoundReplay {
+  roundNumber: number
+  drawerId: string
+  drawerName: string
+  drawerAvatar: string
+  word: string
+  strokes: StrokeData[]
+}
+
+const roundReplayStore = new Map<string, RoundReplay[]>()
 
 export function registerSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
@@ -318,9 +330,6 @@ export function registerSocketHandlers(io: Server): void {
       }
     })
 
-    socket.on('replay:save', (data: { roomId: string; strokes: StrokeData[] }) => {
-    })
-
     socket.on('disconnect', () => {
       const user = socketUserMap.get(socket.id)
       const roomId = socketRoomMap.get(socket.id)
@@ -393,6 +402,7 @@ function handleLeaveRoom(io: Server, socket: Socket): void {
   } else {
     gameService.cleanupGame(roomId)
     voteService.cleanupVote(roomId)
+    roundReplayStore.delete(roomId)
   }
 }
 
@@ -486,6 +496,27 @@ function endRound(io: Server, roomId: string): void {
   if (!room || room.status !== 'playing') return
 
   const word = gameService.getCurrentWord(roomId)
+  const strokes = gameService.getStrokes(roomId)
+  const drawer = room.players.find(p => p.isDrawing)
+
+  if (drawer && strokes.length > 0) {
+    if (!roundReplayStore.has(roomId)) {
+      roundReplayStore.set(roomId, [])
+    }
+    const rounds = roundReplayStore.get(roomId)!
+    const already = rounds.some(r => r.roundNumber === room.currentRound)
+    if (!already) {
+      rounds.push({
+        roundNumber: room.currentRound,
+        drawerId: drawer.userId,
+        drawerName: drawer.username,
+        drawerAvatar: drawer.avatar,
+        word,
+        strokes: [...strokes],
+      })
+    }
+  }
+
   io.to(roomId).emit('game:roundEnd', { word, room: roomService.getRoom(roomId)! })
 
   const nextResult = gameService.startNextRound(roomId)
@@ -493,6 +524,34 @@ function endRound(io: Server, roomId: string): void {
     const updatedRoom = roomService.getRoom(roomId)!
 
     if (updatedRoom.status === 'finished') {
+      const roundReplays = roundReplayStore.get(roomId) || []
+      if (roundReplays.length > 0) {
+        const replayId = uuidv4()
+        const record = {
+          id: replayId,
+          roomId,
+          roomName: room.name,
+          userId: '',
+          username: '',
+          avatar: '',
+          createdAt: new Date().toISOString(),
+          rounds: roundReplays,
+        }
+
+        for (const player of updatedRoom.players) {
+          if (player.isConnected) {
+            replayService.saveReplay({
+              ...record,
+              id: `${replayId}-${player.userId}`,
+              userId: player.userId,
+              username: player.username,
+              avatar: player.avatar,
+            })
+          }
+        }
+      }
+      roundReplayStore.delete(roomId)
+
       io.to(roomId).emit('game:gameEnd', { room: updatedRoom })
 
       const candidates: VoteCandidate[] = updatedRoom.players

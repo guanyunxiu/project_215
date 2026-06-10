@@ -99,3 +99,14 @@ export interface ReplayRound {
   word: string
   strokes: StrokeData[]
 }
+
+export interface ReplayRecord {
+  id: string
+  roomId: string
+  roomName: string
+  userId: string
+  username: string
+  avatar: string
+  createdAt: string
+  rounds: ReplayRound[]
+}

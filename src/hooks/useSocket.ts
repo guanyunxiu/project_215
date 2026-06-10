@@ -113,6 +113,7 @@ export function useSocket() {
       }
       gameStore.getState().setRoundEndWord(data.word)
       gameStore.getState().setRoom(data.room)
+      gameStore.getState().setCurrentDrawer(null)
       gameStore.getState().setCurrentWord(null)
       gameStore.getState().setCurrentHint('')
     })

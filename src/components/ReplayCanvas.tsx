@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
-import { Canvas, PencilBrush, Path } from 'fabric'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import { Canvas, Path } from 'fabric'
 import { StrokeData } from '../../shared/types'
 import { Play, Pause, RotateCcw } from 'lucide-react'
 
@@ -32,21 +32,22 @@ function buildPathFromStroke(stroke: StrokeData): Path {
 export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<Canvas | null>(null)
+  const canvasIdRef = useRef(`replay-canvas-${Math.random().toString(36).slice(2, 9)}`)
   const animFrameRef = useRef<number>(0)
   const startTimeRef = useRef<number>(0)
   const pauseOffsetRef = useRef<number>(0)
   const initAttemptRef = useRef(0)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const addedCountRef = useRef(0)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
-  const strokesRef = useRef(strokes)
   const speedRef = useRef(speed)
   const isPlayingRef = useRef(false)
-  const addedCountRef = useRef(0)
+  const isDisposedRef = useRef(false)
 
-  useEffect(() => {
-    strokesRef.current = strokes
+  const sortedStrokes = useMemo(() => {
+    return [...strokes].sort((a, b) => a.timestamp - b.timestamp)
   }, [strokes])
 
   useEffect(() => {
@@ -58,14 +59,14 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
   }, [isPlaying])
 
   const getDuration = useCallback(() => {
-    if (strokes.length === 0) return 0
-    const ts = strokes.map(s => s.timestamp)
+    if (sortedStrokes.length === 0) return 0
+    const ts = sortedStrokes.map(s => s.timestamp)
     return Math.max(ts[ts.length - 1] - ts[0], 0)
-  }, [strokes])
+  }, [sortedStrokes])
 
   const resetCanvas = useCallback(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || isDisposedRef.current) return
     canvas.clear()
     canvas.backgroundColor = '#ffffff'
     canvas.renderAll()
@@ -76,13 +77,13 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
 
   const addStrokesUpTo = useCallback((elapsed: number) => {
     const canvas = canvasRef.current
-    if (!canvas || strokes.length === 0) return
+    if (!canvas || isDisposedRef.current || sortedStrokes.length === 0) return
 
-    const baseTs = strokes[0].timestamp
+    const baseTs = sortedStrokes[0].timestamp
     const threshold = baseTs + elapsed
 
     let count = 0
-    for (const stroke of strokes) {
+    for (const stroke of sortedStrokes) {
       if (stroke.timestamp <= threshold) {
         count++
       } else {
@@ -92,7 +93,7 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
 
     if (count > addedCountRef.current) {
       for (let i = addedCountRef.current; i < count; i++) {
-        const pathObj = buildPathFromStroke(strokes[i])
+        const pathObj = buildPathFromStroke(sortedStrokes[i])
         pathObj.selectable = false
         pathObj.evented = false
         canvas.add(pathObj)
@@ -100,10 +101,10 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
       addedCountRef.current = count
       canvas.renderAll()
     }
-  }, [strokes])
+  }, [sortedStrokes])
 
   const tick = useCallback(() => {
-    if (!isPlayingRef.current) return
+    if (!isPlayingRef.current || isDisposedRef.current) return
 
     const duration = getDuration()
     const elapsed = (Date.now() - startTimeRef.current) * speedRef.current
@@ -120,6 +121,15 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
     animFrameRef.current = requestAnimationFrame(tick)
   }, [getDuration, addStrokesUpTo])
 
+  useEffect(() => {
+    if (isPlaying) {
+      animFrameRef.current = requestAnimationFrame(tick)
+    }
+    return () => {
+      cancelAnimationFrame(animFrameRef.current)
+    }
+  }, [isPlaying, tick])
+
   const handlePlay = useCallback(() => {
     const duration = getDuration()
     if (duration === 0) return
@@ -131,14 +141,14 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
 
     startTimeRef.current = Date.now() - pauseOffsetRef.current / speedRef.current
     setIsPlaying(true)
-  }, [getDuration, progress, resetCanvas, speed])
+  }, [getDuration, progress, resetCanvas])
 
   const handlePause = useCallback(() => {
     const duration = getDuration()
     const elapsed = (Date.now() - startTimeRef.current) * speedRef.current
     pauseOffsetRef.current = Math.min(elapsed, duration)
     setIsPlaying(false)
-  }, [getDuration, speed])
+  }, [getDuration])
 
   const handleReset = useCallback(() => {
     setIsPlaying(false)
@@ -165,46 +175,40 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
   }, [getDuration, resetCanvas, addStrokesUpTo])
 
   useEffect(() => {
-    if (isPlaying) {
-      animFrameRef.current = requestAnimationFrame(tick)
-    }
-    return () => {
-      cancelAnimationFrame(animFrameRef.current)
-    }
-  }, [isPlaying, tick])
+    isDisposedRef.current = false
+    addedCountRef.current = 0
 
-  const initCanvas = useCallback(() => {
-    if (!containerRef.current) return
-    if (canvasRef.current) return
+    const initCanvas = () => {
+      if (!containerRef.current || isDisposedRef.current) return
+      if (canvasRef.current) return
 
-    const el = containerRef.current
-    const w = el.clientWidth
-    const h = el.clientHeight
+      const el = containerRef.current
+      const w = el.clientWidth
+      const h = el.clientHeight
 
-    if (w < 10 || h < 10) {
-      initAttemptRef.current++
-      if (initAttemptRef.current < 50) {
-        requestAnimationFrame(initCanvas)
+      if (w < 10 || h < 10) {
+        initAttemptRef.current++
+        if (initAttemptRef.current < 50) {
+          requestAnimationFrame(initCanvas)
+        }
+        return
       }
-      return
+
+      const canvasEl = document.createElement('canvas')
+      canvasEl.id = canvasIdRef.current
+      el.appendChild(canvasEl)
+
+      const canvas = new Canvas(canvasIdRef.current, {
+        width: w,
+        height: h,
+        backgroundColor: '#ffffff',
+        selection: false,
+        isDrawingMode: false,
+      })
+
+      canvasRef.current = canvas
     }
 
-    const canvasEl = document.createElement('canvas')
-    canvasEl.id = 'replay-canvas'
-    el.appendChild(canvasEl)
-
-    const canvas = new Canvas('replay-canvas', {
-      width: w,
-      height: h,
-      backgroundColor: '#ffffff',
-      selection: false,
-      isDrawingMode: false,
-    })
-
-    canvasRef.current = canvas
-  }, [])
-
-  useEffect(() => {
     initCanvas()
 
     const el = containerRef.current
@@ -228,21 +232,22 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
     resizeObserverRef.current = observer
 
     return () => {
+      isDisposedRef.current = true
+      cancelAnimationFrame(animFrameRef.current)
       observer.disconnect()
       resizeObserverRef.current = null
-      cancelAnimationFrame(animFrameRef.current)
       if (canvasRef.current) {
         canvasRef.current.dispose()
         canvasRef.current = null
       }
+      const existing = el.querySelector(`#${canvasIdRef.current}`)
+      if (existing) existing.remove()
+      const lower = el.querySelector('.lower-canvas')
+      if (lower) lower.remove()
+      const upper = el.querySelector('.upper-canvas')
+      if (upper) upper.remove()
     }
-  }, [initCanvas])
-
-  useEffect(() => {
-    return () => {
-      cancelAnimationFrame(animFrameRef.current)
-    }
-  }, [])
+  }, [sortedStrokes])
 
   const duration = getDuration()
   const formatTime = (ms: number) => {
@@ -271,7 +276,7 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
         <button
           onClick={isPlaying ? handlePause : handlePlay}
           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
-          disabled={strokes.length === 0}
+          disabled={sortedStrokes.length === 0}
         >
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
@@ -279,7 +284,7 @@ export default function ReplayCanvas({ strokes, speed = 1 }: ReplayCanvasProps) 
         <button
           onClick={handleReset}
           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
-          disabled={strokes.length === 0}
+          disabled={sortedStrokes.length === 0}
         >
           <RotateCcw className="w-4 h-4" />
         </button>
